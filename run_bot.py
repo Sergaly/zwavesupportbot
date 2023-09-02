@@ -29,8 +29,16 @@ else:
 
 class Event(StatesGroup):
     restoreAccess = State()  # Восстановление доступа
+    provideMACID = State() #Предоставление ID и MAC
     question = State()  # Произвольный вопрос
 
+##Markup
+def AgreeToResetMarkup():
+    markup = ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    yes = KeyboardButton(conf_str['YES'])
+    no = KeyboardButton(conf_str['NO'])
+    markup.add(yes, no)
+    return markup
 
 @dp.message_handler(commands=[])
 async def any_other_private_message(message: types.Message):
@@ -55,7 +63,10 @@ async def send_help(message: types.Message):
 
 @dp.message_handler(commands=['yoursmarthome'])
 async def send_yshdescripption(message: types.Message):
-    await message.answer(conf_str['YOURSMARTHOMEDESCRIPTION'], parse_mode="HTML")
+    await message.answer(conf_str['YOURSMARTHOMEDESCRIPTION1'], parse_mode="HTML")
+    await message.answer(conf_str['YOURSMARTHOMEDESCRIPTION2'], parse_mode="HTML")
+    await message.answer(conf_str['YOURSMARTHOMEDESCRIPTION3'], parse_mode="HTML")
+    await message.answer(conf_str['YOURSMARTHOMEDESCRIPTION4'], parse_mode="HTML")
 
 @dp.message_handler(commands=['more'], chat_type=types.ChatType.PRIVATE)
 async def send_more(message: types.Message):
@@ -64,16 +75,33 @@ async def send_more(message: types.Message):
 
 @dp.message_handler(commands=['restoreaccess'])
 async def send_restoreaccess(message: types.Message):
-    await message.answer(conf_str['RESTOREACCESSDESCRIPTION'], parse_mode="HTML")
+    await message.answer(conf_str['RESTOREACCESSDESCRIPTION'], parse_mode="HTML", reply_markup=AgreeToResetMarkup())
     await Event.restoreAccess.set()
 
 @dp.message_handler(state=Event.restoreAccess)
+async def send_restoreaccess_warning(message: types.Message):
+    if message.text.upper() == conf_str['YES'].upper():
+        await bot.send_message(message.chat.id, conf_str["RESTOREACCESSMACID"], reply_markup=ReplyKeyboardRemove())
+        with open(config["YUBIIBACK"], 'rb') as yubii, open(config["HCLBAK"], 'rb') as hcl:
+            await bot.send_photo(chat_id=message.chat.id, photo=yubii)
+            await bot.send_photo(chat_id=message.chat.id, photo=hcl)
+        Event.next()
+    elif message.text.upper() == conf_str['NO'].upper():
+        await bot.send_message(message.chat.id, conf_str["RESTOREACCESSSUGGESTION"], reply_markup=ReplyKeyboardRemove())
+    else:
+        await bot.send_message(service_chatid,
+                               f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) запрашивает помощь в восстановлении доступа:\n{message.text}")
+        await message.answer(conf_str['RESTOREACCESSGOTSUGGGESTION'], parse_mode="HTML")
+        await Event.last()
+        await Event.next()
+
+@dp.message_handler(state=Event.provideMACID)
 async def send_restoreaccess_text(message: types.Message):
-    await bot.send_message(service_chatid,
-                           f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) прислал серийный номер контроллера для восстановления:\n{message.text}")
-    await message.answer(conf_str['RESTOREACCESSGOT'], parse_mode="HTML")
-    await Event.last()
-    await Event.next()
+        await bot.send_message(service_chatid,
+                               f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) прислал серийный номер контроллера для восстановления:\n{message.text}")
+        await message.answer(conf_str['RESTOREACCESSGOTID'], parse_mode="HTML")
+        await Event.last()
+        await Event.next()
 
 @dp.message_handler(commands=['question'])
 async def send_question(message: types.Message):
