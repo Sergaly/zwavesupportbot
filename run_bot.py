@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 from aiogram.dispatcher.filters import Text
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from dotenv import dotenv_values
 
@@ -14,7 +14,8 @@ conf_str = dotenv_values("strings.env")
 API_TOKEN = config['BOT_API_KEY']
 # Initialize bot and dispatcher
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot, storage=MemoryStorage())
+storage = RedisStorage2(config['RedisServer'], 6379, db=1, pool_size=10, prefix=config['RedisKey'])
+dp = Dispatcher(bot, storage=storage)
 
 DEBUG = (config['DEBUG'] == 'True')
 
