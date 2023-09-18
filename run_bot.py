@@ -30,6 +30,7 @@ else:
 
 class Event(StatesGroup):
     restoreAccess = State()  # Восстановление доступа
+    getEmail = State()  #Запросить e-mail
     provideMACID = State() #Предоставление ID и MAC
     question = State()  # Произвольный вопрос
 
@@ -40,12 +41,6 @@ def AgreeToResetMarkup():
     no = KeyboardButton(conf_str['NO'])
     markup.add(yes, no)
     return markup
-
-@dp.message_handler(commands=[])
-async def any_other_private_message(message: types.Message):
-    await bot.send_message(service_chatid,
-                           f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) задал вопрос:\n\n{message.text}")
-    await message.answer(conf_str['QUESTIONGOT'], parse_mode="HTML")
 
 # Обработка начала общения
 @dp.message_handler(state='*', commands=['start'])
@@ -82,24 +77,39 @@ async def send_restoreaccess(message: types.Message):
 @dp.message_handler(state=Event.restoreAccess)
 async def send_restoreaccess_warning(message: types.Message):
     if message.text.upper() == conf_str['YES'].upper():
-        await bot.send_message(message.chat.id, conf_str["RESTOREACCESSMACID"], reply_markup=ReplyKeyboardRemove())
-        with open(config["YUBIIBACK"], 'rb') as yubii, open(config["HCLBAK"], 'rb') as hcl:
-            await bot.send_photo(chat_id=message.chat.id, photo=yubii)
-            await bot.send_photo(chat_id=message.chat.id, photo=hcl)
-        Event.next()
+        await bot.send_message(message.chat.id, conf_str["RESTOREACCESSEMAIL"],
+                               reply_markup=ReplyKeyboardRemove(),
+                               parse_mode="HTML")
+        await Event.next()
     elif message.text.upper() == conf_str['NO'].upper():
-        await bot.send_message(message.chat.id, conf_str["RESTOREACCESSSUGGESTION"], reply_markup=ReplyKeyboardRemove())
+        await bot.send_message(message.chat.id, conf_str["RESTOREACCESSSUGGESTION"],
+                               reply_markup=ReplyKeyboardRemove())
     else:
         await bot.send_message(service_chatid,
-                               f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) запрашивает помощь в восстановлении доступа:\n{message.text}")
+                               f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) запрашивает помощь в восстановлении доступа:👇",
+                               reply_markup=ReplyKeyboardRemove())
+        await message.forward(service_chatid)
         await message.answer(conf_str['RESTOREACCESSGOTSUGGGESTION'], parse_mode="HTML")
         await Event.last()
         await Event.next()
 
-@dp.message_handler(state=Event.provideMACID)
+@dp.message_handler(state=Event.getEmail)
+async def send_restoreaccess(message: types.Message):
+    await bot.send_message(service_chatid,
+                           f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) предоставил email👇")
+    await message.forward(service_chatid)
+
+    await bot.send_message(message.chat.id, conf_str["RESTOREACCESSMACID"], reply_markup=ReplyKeyboardRemove())
+    with open(config["YUBIIBACK"], 'rb') as yubii, open(config["HCLBAK"], 'rb') as hcl:
+        await bot.send_photo(chat_id=message.chat.id, photo=yubii)
+        await bot.send_photo(chat_id=message.chat.id, photo=hcl)
+    await Event.next()
+
+@dp.message_handler(state=Event.provideMACID, content_types=['any'])
 async def send_restoreaccess_text(message: types.Message):
         await bot.send_message(service_chatid,
-                               f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) прислал серийный номер контроллера для восстановления:\n{message.text}")
+                               f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) прислал серийный номер контроллера для восстановления:👇")
+        await message.forward(service_chatid)
         await message.answer(conf_str['RESTOREACCESSGOTID'], parse_mode="HTML")
         await Event.last()
         await Event.next()
@@ -112,7 +122,8 @@ async def send_question(message: types.Message):
 @dp.message_handler(state=Event.question)
 async def send_question_text(message: types.Message):
     await bot.send_message(service_chatid,
-                           f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) задал вопрос:\n{message.text}")
+                           f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) задал вопрос: 👇")
+    await message.forward(service_chatid)
     await message.answer(conf_str['QUESTIONGOT'], parse_mode="HTML")
     await Event.last()
     await Event.next()
@@ -123,13 +134,23 @@ async def send_question_text(message: types.Message):
     state='*')
 async def group_message(message: types.Message):
     try:
-        msg = message.reply_to_message.text # if replied
-        match = re.search(r"ID(.+?)\s", msg)
-        if match:
-            user_id = int(match.group(1))
-            await bot.send_message(user_id, f"По вашему сообщению \n{msg} \n\nдаем ответ:\n{message.text}")
+        if message.reply_to_message.forward_date is not None:
+            await message.reply(conf_str["NOANSWERTOFORWARD"])
+        else:
+            msg = message.reply_to_message.text  # if replied
+            match = re.search(r"ID(.+?)\s", msg)
+            if match:
+                user_id = int(match.group(1))
+                await bot.send_message(user_id, f"По вашему сообщению \n{msg} \n\nдаем ответ:\n{message.text}")
     except AttributeError:
         await bot.send_message(service_chatid, conf_str['GROUPUNKNOWNMESSAGE'])
+
+@dp.message_handler(content_types=['any'])
+async def any_other_private_message(message: types.Message):
+    await bot.send_message(service_chatid,
+                           f"🟢 Клиент ID{message.from_user.id} (@{message.from_user.username}) написал сообщение: 👇")
+    await message.forward(service_chatid)
+    await message.answer(conf_str['QUESTIONGOT'], parse_mode="HTML")
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
