@@ -57,6 +57,15 @@ async def send_help(message: types.Message):
     """
     await message.answer(conf_str['HELP'])
 
+@dp.message_handler(commands=['thermostat'])
+async def send_help(message: types.Message):
+    """
+    This handler will be called when user sends `/help` command
+    """
+    with open(config["THERMOSTAT"], 'rb') as thermostat:
+        await bot.send_photo(chat_id=message.chat.id, photo=thermostat)
+    await message.answer(conf_str['THERMOSTAT'])
+
 @dp.message_handler(commands=['yoursmarthome'])
 async def send_yshdescripption(message: types.Message):
     await message.answer(conf_str['YOURSMARTHOMEDESCRIPTION1'], parse_mode="HTML")
